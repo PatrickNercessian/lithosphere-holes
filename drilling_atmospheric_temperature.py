@@ -45,6 +45,8 @@ FAN_EFFICIENCY = 0.7  # 70% efficiency
 
 # Ground Properties
 GROUND_THERMAL_CONDUCTIVITY = 2.0  # W/(m·K), typical value for soil
+GROUND_DENSITY = 1600  # kg/m³, typical value for soil
+GROUND_SPECIFIC_HEAT = 900  # J/(kg·K), typical value for soil
 
 # Step 1: Calculate the Mass of Air over 1 Square Mile
 def calculate_air_mass(area_miles):
@@ -64,26 +66,32 @@ def calculate_energy_required(mass, delta_T, specific_heat):
     return energy_required
 
 # Step 3: Calculate Heat Transfer per Hole
-def calculate_heat_transfer_per_hole():
+def calculate_heat_transfer_per_hole(hole_diameter_meters, hole_depth_meters, temperature_difference):
     # Calculate surface area of the hole (lateral surface area)
-    circumference = math.pi * HOLE_DIAMETER_METERS
-    surface_area = circumference * HOLE_DEPTH_METERS  # m²
+    circumference = math.pi * hole_diameter_meters
+    surface_area = circumference * hole_depth_meters  # m²
+    print(f"Surface area of the hole: {surface_area:.2f} m²")
 
-    # Calculate thermal resistance of air and ground
-    r_air = HOLE_DIAMETER_METERS / (2 * AIR_THERMAL_CONDUCTIVITY * surface_area)
-    r_ground = math.log((HOLE_DIAMETER_METERS + 1) / HOLE_DIAMETER_METERS) / (2 * math.pi * GROUND_THERMAL_CONDUCTIVITY * HOLE_DEPTH_METERS)
+    # Calculate convective heat transfer coefficient
+    reynolds_number = (AIR_DENSITY * AIR_VELOCITY * hole_diameter_meters) / AIR_VISCOSITY
+    nusselt_number = 0.023 * (reynolds_number ** 0.8) * (AIR_PRANDTL_NUMBER ** 0.4)
+    h_conv = (nusselt_number * AIR_THERMAL_CONDUCTIVITY) / hole_diameter_meters
+
+    # Calculate thermal resistances
+    r_conv = 1 / (h_conv * surface_area)
+    r_ground = math.log((hole_diameter_meters / 2 + 1) / (hole_diameter_meters / 2)) / (2 * math.pi * GROUND_THERMAL_CONDUCTIVITY * hole_depth_meters)
 
     # Total thermal resistance
-    r_total = r_air + r_ground
+    r_total = r_conv + r_ground
 
     # Calculate heat transfer
-    heat_transfer_per_hole = TEMPERATURE_DIFFERENCE / r_total  # Watts
+    heat_transfer_per_hole = temperature_difference / r_total  # Watts
 
     return heat_transfer_per_hole
 
-# Step 4: Calculate Energy Removed by One Hole in One Month
-def calculate_energy_removed_per_hole(heat_transfer_per_hole):
-    energy_removed_per_hole = heat_transfer_per_hole * SECONDS_IN_MONTH  # Joules
+# Step 4: Calculate Energy Removed by One Hole in time_period
+def calculate_energy_removed_per_hole(heat_transfer_per_hole, time_period):
+    energy_removed_per_hole = heat_transfer_per_hole * time_period  # Joules
     return energy_removed_per_hole
 
 # Step 5: Calculate Number of Holes Required
@@ -91,36 +99,49 @@ def calculate_number_of_holes(total_energy_required, energy_removed_per_hole):
     number_of_holes = total_energy_required / energy_removed_per_hole
     return number_of_holes
 
+
+# "The thermal diffusion radius represents the distance at which the temperature change in the ground will be about 1/e (approximately 37%) of the initial temperature difference between the air in the hole and the surrounding ground."
+# TODO doesn't take into account the airflow I think, so it will actually be larger than this
+def calculate_thermal_diffusion_radius(time_in_seconds):
+    # Calculate thermal diffusivity
+    thermal_diffusivity = GROUND_THERMAL_CONDUCTIVITY / (GROUND_DENSITY * GROUND_SPECIFIC_HEAT)
+    
+    # Calculate diffusion distance
+    diffusion_distance = math.sqrt(4 * thermal_diffusivity * time_in_seconds)
+    
+    return diffusion_distance
+
 # Step 6: Main Function to Perform Calculations
 def main():
     # Step 1
     total_mass, area_meters = calculate_air_mass(AREA_MILES)
     print(f"Total mass of air over {AREA_MILES} square mile(s): {total_mass:.2e} kg")
-    print(f"Total area in square meters: {area_meters:.2e} m²\n")
 
     # Step 2
     total_energy_required = calculate_energy_required(total_mass, DELTA_T, AIR_SPECIFIC_HEAT)
     print(f"Total energy required to lower temperature by {DELTA_T}°C: {total_energy_required:.2e} Joules\n")
 
     # Step 3
-    heat_transfer_per_hole = calculate_heat_transfer_per_hole()
+    heat_transfer_per_hole = calculate_heat_transfer_per_hole(HOLE_DIAMETER_METERS, HOLE_DEPTH_METERS, TEMPERATURE_DIFFERENCE)
     print(f"Conductive heat transfer per hole: {heat_transfer_per_hole:.2f} Watts")
 
     # Step 4
-    energy_removed_per_hole = calculate_energy_removed_per_hole(heat_transfer_per_hole)
+    energy_removed_per_hole = calculate_energy_removed_per_hole(heat_transfer_per_hole, SECONDS_IN_MONTH)
     print(f"Energy removed per hole in one month: {energy_removed_per_hole:.2e} Joules\n")
 
     # Step 5
     number_of_holes = calculate_number_of_holes(total_energy_required, energy_removed_per_hole)
     print(f"Number of holes required: {number_of_holes:.2f}")
 
-    # Additional Output for Practicality
-    # Calculate area per hole
-    # TODO instead of this, we should see how close they can be without affecting each other's heat transfer
-    area_per_hole = area_meters / number_of_holes  # m²/hole
-    spacing_between_holes = math.sqrt(area_per_hole)  # meters
-    print(f"Area per hole: {area_per_hole:.2f} m²/hole")
-    print(f"Spacing between holes: {spacing_between_holes:.2f} meters\n")
+    # Calculate thermal diffusion radius
+    thermal_diffusion_radius = calculate_thermal_diffusion_radius(SECONDS_IN_MONTH)
+    print(f"Estimated radius of ground with ~37% of reduced temperature difference after one month: {thermal_diffusion_radius:.2f} meters")
+    # Calculate how much space we need to drill all the holes using the thermal diffusion radius
+    area_to_drill = number_of_holes * math.pi * (thermal_diffusion_radius ** 2)
+    print(f"Total area in square meters: {area_meters:.2f} m²")
+    print(f"Area to drill: {area_to_drill:.2f} m²")
+    print(f"Percentage of area to drill: {(area_to_drill / area_meters) * 100:.2f}%\n")
+
 
     # Operational Energy Consumption
     # Calculate power required to move air (simplified)
@@ -129,7 +150,9 @@ def main():
     volumetric_flow_rate = cross_sectional_area * AIR_VELOCITY  # m³/s
     mass_flow_rate = volumetric_flow_rate * AIR_DENSITY  # kg/s
     fan_power = (mass_flow_rate * (AIR_VELOCITY ** 2)) / (2 * FAN_EFFICIENCY)  # Watts
-    print(f"Fan power required per hole: {fan_power:.2f} Watts")
+    print(f"Fan power required per hole: {fan_power:.2f} Watts\n")
+    print(f"Total fan power required: {fan_power * number_of_holes:.2f} Watts\n")
+
 
 # Run the main function
 if __name__ == "__main__":
