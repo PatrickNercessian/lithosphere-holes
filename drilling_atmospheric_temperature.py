@@ -157,3 +157,22 @@ def main():
 # Run the main function
 if __name__ == "__main__":
     main()
+
+# Current output (Sat Oct 12 2024)
+
+# Total mass of air over 1 square mile(s): 2.68e+10 kg
+# Total energy required to lower temperature by 1°C: 2.69e+13 Joules
+
+# Surface area of the hole: 31.92 m²
+# Conductive heat transfer per hole: 6551.19 Watts
+# Energy removed per hole in one month: 1.70e+10 Joules
+
+# Number of holes required: 1583.27
+# Estimated radius of ground with ~37% of reduced temperature difference after one month: 3.79 meters
+# Total area in square meters: 2589975.24 m²
+# Area to drill: 71625.26 m²
+# Percentage of area to drill: 2.77%
+
+# Fan power required per hole: 0.42 Watts
+
+# Total fan power required: 667.02 Watts
