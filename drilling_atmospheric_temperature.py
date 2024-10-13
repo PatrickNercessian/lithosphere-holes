@@ -26,10 +26,10 @@ SECONDS_IN_DAY = HOURS_IN_DAY * SECONDS_IN_HOUR
 SECONDS_IN_MONTH = SECONDS_IN_DAY * 30
 
 # Hole Parameters
-HOLE_DIAMETER_INCHES = 1  # Hole diameter in inches
-HOLE_DIAMETER_METERS = HOLE_DIAMETER_INCHES * 0.0254  # 1 inch = 0.0254 meters
+HOLE_DIAMETER_METERS = 0.02  # 2 cm
 HOLE_DEPTH_METERS = 400  # Hole depth in meters
 AIR_VELOCITY = 10  # Air velocity in m/s (practical airflow rate)
+WATER_VELOCITY = 10  # Water velocity in m/s (practical flow rate)
 AIR_TEMPERATURE = 30  # Air temperature in °C
 GROUND_TEMPERATURE = 20  # Ground temperature in °C
 TEMPERATURE_DIFFERENCE = AIR_TEMPERATURE - GROUND_TEMPERATURE  # ΔT in °C
@@ -39,6 +39,12 @@ AIR_VISCOSITY = 1.85e-5  # Dynamic viscosity in Pa·s
 AIR_THERMAL_CONDUCTIVITY = 0.0263  # Thermal conductivity in W/(m·K)
 AIR_PRANDTL_NUMBER = 0.707  # Prandtl number (dimensionless)
 AIR_DENSITY = 1.164  # Air density at 30°C in kg/m³
+
+# Water Properties at 30°C
+WATER_VISCOSITY = 0.7972e-3  # Dynamic viscosity in Pa·s
+WATER_THERMAL_CONDUCTIVITY = 0.608  # Thermal conductivity in W/(m·K)
+WATER_PRANDTL_NUMBER = 5.82  # Prandtl number (dimensionless)
+WATER_DENSITY = 995.7  # Density in kg/m³
 
 # Fan Efficiency
 FAN_EFFICIENCY = 0.7  # 70% efficiency
@@ -66,16 +72,25 @@ def calculate_energy_required(mass, delta_T, specific_heat):
     return energy_required
 
 # Step 3: Calculate Heat Transfer per Hole
-def calculate_heat_transfer_per_hole(hole_diameter_meters, hole_depth_meters, temperature_difference):
+def calculate_heat_transfer_per_hole(
+    hole_diameter_meters,
+    hole_depth_meters,
+    temperature_difference,
+    fluid_velocity,
+    fluid_density,
+    fluid_viscosity,
+    fluid_prandtl_number,
+    fluid_thermal_conductivity
+):
     # Calculate surface area of the hole (lateral surface area)
     circumference = math.pi * hole_diameter_meters
     surface_area = circumference * hole_depth_meters  # m²
     print(f"Surface area of the hole: {surface_area:.2f} m²")
 
     # Calculate convective heat transfer coefficient
-    reynolds_number = (AIR_DENSITY * AIR_VELOCITY * hole_diameter_meters) / AIR_VISCOSITY
-    nusselt_number = 0.023 * (reynolds_number ** 0.8) * (AIR_PRANDTL_NUMBER ** 0.4)
-    h_conv = (nusselt_number * AIR_THERMAL_CONDUCTIVITY) / hole_diameter_meters
+    reynolds_number = (fluid_density * fluid_velocity * hole_diameter_meters) / fluid_viscosity
+    nusselt_number = 0.023 * (reynolds_number ** 0.8) * (fluid_prandtl_number ** 0.4)
+    h_conv = (nusselt_number * fluid_thermal_conductivity) / hole_diameter_meters
 
     # Calculate thermal resistances
     r_conv = 1 / (h_conv * surface_area)
@@ -122,7 +137,21 @@ def main():
     print(f"Total energy required to lower temperature by {DELTA_T}°C: {total_energy_required:.2e} Joules\n")
 
     # Step 3
-    heat_transfer_per_hole = calculate_heat_transfer_per_hole(HOLE_DIAMETER_METERS, HOLE_DEPTH_METERS, TEMPERATURE_DIFFERENCE)
+    heat_transfer_per_hole = calculate_heat_transfer_per_hole(
+        HOLE_DIAMETER_METERS,
+        HOLE_DEPTH_METERS,
+        TEMPERATURE_DIFFERENCE,
+        # AIR_VELOCITY,
+        WATER_VELOCITY,
+        # AIR_DENSITY,
+        WATER_DENSITY,
+        # AIR_VISCOSITY,
+        WATER_VISCOSITY,
+        # AIR_PRANDTL_NUMBER,
+        WATER_PRANDTL_NUMBER,
+        # AIR_THERMAL_CONDUCTIVITY,
+        WATER_THERMAL_CONDUCTIVITY,
+    )
     print(f"Conductive heat transfer per hole: {heat_transfer_per_hole:.2f} Watts")
 
     # Step 4
@@ -145,34 +174,15 @@ def main():
 
     # Operational Energy Consumption
     # Calculate power required to move air (simplified)
-    hole_radius = HOLE_DIAMETER_METERS / 2
-    cross_sectional_area = math.pi * (hole_radius ** 2)
-    volumetric_flow_rate = cross_sectional_area * AIR_VELOCITY  # m³/s
-    mass_flow_rate = volumetric_flow_rate * AIR_DENSITY  # kg/s
-    fan_power = (mass_flow_rate * (AIR_VELOCITY ** 2)) / (2 * FAN_EFFICIENCY)  # Watts
-    print(f"Fan power required per hole: {fan_power:.2f} Watts\n")
-    print(f"Total fan power required: {fan_power * number_of_holes:.2f} Watts\n")
+    # hole_radius = HOLE_DIAMETER_METERS / 2
+    # cross_sectional_area = math.pi * (hole_radius ** 2)
+    # volumetric_flow_rate = cross_sectional_area * AIR_VELOCITY  # m³/s
+    # mass_flow_rate = volumetric_flow_rate * AIR_DENSITY  # kg/s
+    # fan_power = (mass_flow_rate * (AIR_VELOCITY ** 2)) / (2 * FAN_EFFICIENCY)  # Watts
+    # print(f"Fan power required per hole: {fan_power:.2f} Watts")
+    # print(f"Total fan power required: {fan_power * number_of_holes:.2f} Watts")
 
 
 # Run the main function
 if __name__ == "__main__":
     main()
-
-# Current output (Sat Oct 12 2024)
-
-# Total mass of air over 1 square mile(s): 2.68e+10 kg
-# Total energy required to lower temperature by 1°C: 2.69e+13 Joules
-
-# Surface area of the hole: 31.92 m²
-# Conductive heat transfer per hole: 6551.19 Watts
-# Energy removed per hole in one month: 1.70e+10 Joules
-
-# Number of holes required: 1583.27
-# Estimated radius of ground with ~37% of reduced temperature difference after one month: 3.79 meters
-# Total area in square meters: 2589975.24 m²
-# Area to drill: 71625.26 m²
-# Percentage of area to drill: 2.77%
-
-# Fan power required per hole: 0.42 Watts
-
-# Total fan power required: 667.02 Watts
